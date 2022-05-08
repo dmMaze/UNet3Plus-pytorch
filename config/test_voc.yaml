@@ -1,0 +1,25 @@
+model:
+  encoder: resnet18
+  skip_ch: 64
+  aux_losses: 2
+  pretrained: false
+
+data:
+  type: voc2012_aug
+  num_classes: 21
+  num_workers: 4
+  batch_size: 16
+  max_training_samples: 3000
+  
+train:
+  seed: 42
+  num_epochs: 20
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw
+  accum_steps: 2
+  resume: ''
+
+  logger:
+    tensorboard: True
+    log_dir: ./logs/

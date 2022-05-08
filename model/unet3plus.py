@@ -1,6 +1,11 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from typing import List
+import torch.nn.functional as F
+
+from utils.weight_init import weight_init
+
 
 def u3pblock(in_ch, out_ch, num_block=2, kernel_size=3, padding=1, down_sample=False):
     m = []
@@ -80,6 +85,7 @@ class U3PEncoderDefault(nn.Module):
         for ii, (ch_in, ch_out) in enumerate(zip(channels[:-1], channels[1:])):
             self.layers.append(u3pblock(ch_in, ch_out, num_block, down_sample= ii > 0))
         self.channels = channels
+        self.apply(weight_init)
         
     def forward(self, x):
         encoder_out = []
@@ -108,40 +114,68 @@ class U3PDecoder(nn.Module):
             dec_map_list.append(layer(enc_map_list[ii: ], dec_map_list))
         return dec_map_list
 
-class Unet3Plus(nn.Module):
+class UNet3Plus(nn.Module):
 
     def __init__(self, 
-                 channels=[3, 64, 128, 256, 512, 1024],
+                 num_classes=1,
+                 skip_ch=64,
+                 aux_losses=2,
                  encoder: U3PEncoderDefault = None,
+                 channels=[3, 64, 128, 256, 512, 1024],
                  use_cgm=True):
         super().__init__()
+
         self.encoder = U3PEncoderDefault(channels) if encoder is None else encoder
         channels = self.encoder.channels
-        self.decoder = U3PDecoder(self.encoder.channels[1:])
+        num_decoder_layers = len(channels) - 1
+        decoder_ch = skip_ch * num_decoder_layers
+
+        self.decoder = U3PDecoder(self.encoder.channels[1:], skip_ch=skip_ch)
+        self.decoder.apply(weight_init)
+        
         self.cls = nn.Sequential(
                     nn.Dropout(p=0.5),
                     nn.Conv2d(channels[-1], 2, 1),
                     nn.AdaptiveMaxPool2d(1),
                     nn.Sigmoid()
-                ) if use_cgm else None
+                ) if use_cgm and num_classes <= 2 else None
+        
+        self.head = nn.Conv2d(decoder_ch, num_classes, 3, padding=1)
+        self.head.apply(weight_init)
+
+        if aux_losses > 0:
+            self.aux_head = nn.ModuleDict()
+            layer_indices = np.arange(num_decoder_layers - aux_losses - 1, num_decoder_layers - 1)
+            for ii in layer_indices:
+                ch = decoder_ch if ii != 0 else channels[-1]
+                self.aux_head.add_module(f'aux_head{ii}', nn.Conv2d(ch, num_classes, 3, padding=1))
+            self.aux_head.apply(weight_init)
+        else:
+            self.aux_head = None
 
     def forward(self, x): 
+        _, _, h, w = x.shape
         de_out = self.decoder(self.encoder(x))
-        pred = {}
         have_obj = 1
-        for ii, de in enumerate(de_out):
-            if ii == 0:
-                if self.cls is not None:
-                    pred['cls'] = self.cls(de).squeeze_()
-                    have_obj = torch.argmax(pred['cls'])
-            pred[f'pred{ii}'] = de * have_obj
-        return pred
-                    
 
+        pred = self.resize(self.head(de_out[-1]), h, w)
+        
+        if self.training:
+            pred = {'final_pred': pred}
+            if self.aux_head is not None:
+                for ii, de in enumerate(de_out[:-1]):
+                    if ii == 0:
+                        if self.cls is not None:
+                            pred['cls'] = self.cls(de).squeeze_()
+                            have_obj = torch.argmax(pred['cls'])
+                    head_key = f'aux_head{ii}'
+                    if head_key in self.aux_head:
+                        de = de * have_obj
+                        pred[f'aux{ii}'] = self.resize(self.aux_head[head_key](de), h, w)
+        return pred
     
-if __name__ == '__main__':
-    input = torch.randn((1, 3, 320, 320))
-    model = Unet3Plus()
-    pred = model(input)
-    pass
-    
+    def resize(self, x, h, w) -> torch.Tensor:
+        _, _, xh, xw = x.shape
+        if xh != h or xw != w:
+            x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
+        return x

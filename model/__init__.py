@@ -3,8 +3,8 @@ import torch.nn as nn
 from torchvision.models import resnet18, resnet34, ResNet
 from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names
 
-from .unet3plus import Unet3Plus, U3PEncoderDefault, U3PDecoder
-
+from utils.weight_init import weight_init
+from .unet3plus import UNet3Plus
 
 resenet_cfg = {
     'resnet18': {
@@ -40,6 +40,8 @@ class U3PResNetEncoder(nn.Module):
         super().__init__()
         resnet: ResNet = globals()[backbone](pretrained=pretrained)
         cfg = resenet_cfg[backbone]
+        if not pretrained:
+            resnet.apply(weight_init)
         self.backbone = create_feature_extractor(resnet, return_nodes=cfg['return_nodes'])
 
         # print(resnet)
@@ -62,11 +64,11 @@ class U3PResNetEncoder(nn.Module):
         return out
 
 
-def build_unet3plus(encoder='default', use_cgm=False) -> Unet3Plus:
+def build_unet3plus(num_classes, encoder='default', skip_ch=64, aux_losses=2, use_cgm=False, pretrained=False) -> UNet3Plus:
     if encoder == 'default':
         encoder = None
     elif encoder in resenet_cfg:
-        encoder = U3PResNetEncoder(backbone=encoder)
-    model = Unet3Plus(encoder=encoder, use_cgm=use_cgm)
+        encoder = U3PResNetEncoder(backbone=encoder, pretrained=pretrained)
+    model = UNet3Plus(num_classes, skip_ch, aux_losses, encoder, use_cgm=use_cgm)
     return model
 

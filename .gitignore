@@ -1,3 +1,10 @@
-__pycache__
+*.ckpt
+*.pt
+*.tar
+temp.ipynb
 
+logs
+VOC2012
+VOCdevkit
+__pycache__
 .vscode
