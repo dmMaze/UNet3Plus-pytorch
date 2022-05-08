@@ -112,19 +112,36 @@ class Unet3Plus(nn.Module):
 
     def __init__(self, 
                  channels=[3, 64, 128, 256, 512, 1024],
-                 encoder: U3PEncoderDefault = None):
+                 encoder: U3PEncoderDefault = None,
+                 use_cgm=True):
         super().__init__()
-        if encoder is None:
-            self.encoder = U3PEncoderDefault(channels)
+        self.encoder = U3PEncoderDefault(channels) if encoder is None else encoder
+        channels = self.encoder.channels
         self.decoder = U3PDecoder(self.encoder.channels[1:])
+        self.cls = nn.Sequential(
+                    nn.Dropout(p=0.5),
+                    nn.Conv2d(channels[-1], 2, 1),
+                    nn.AdaptiveMaxPool2d(1),
+                    nn.Sigmoid()
+                ) if use_cgm else None
 
     def forward(self, x): 
-        return self.decoder(self.encoder(x))
+        de_out = self.decoder(self.encoder(x))
+        pred = {}
+        have_obj = 1
+        for ii, de in enumerate(de_out):
+            if ii == 0:
+                if self.cls is not None:
+                    pred['cls'] = self.cls(de).squeeze_()
+                    have_obj = torch.argmax(pred['cls'])
+            pred[f'pred{ii}'] = de * have_obj
+        return pred
+                    
 
     
 if __name__ == '__main__':
     input = torch.randn((1, 3, 320, 320))
     model = Unet3Plus()
-    model(input)
+    pred = model(input)
     pass
     
