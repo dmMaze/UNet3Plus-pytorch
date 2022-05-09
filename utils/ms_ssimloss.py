@@ -34,6 +34,7 @@ def ssim_index(img1: torch.Tensor,
         img1 = img1.unsqueeze(1)
         img2 = img2.unsqueeze(1)
         channel = 1
+    _, channel, height, width = img1.shape
     if img1.dtype == torch.long:
         img1 = img1.float()
     if img2.dtype == torch.long:
@@ -59,6 +60,7 @@ def ssim_index(img1: torch.Tensor,
     # https://en.wikipedia.org/wiki/Structural_similarity#Algorithm
     ssim = (2*mean12 + c1) * (2*covar + c2) \
         / ((mean1 + mean2 + c1) * (var1 + var2 + c2))
+    ssim = ssim.sum(dim=(2, 3)) / (height * width)
     if nonnegative:
         ssim = relu(ssim)
     # print(mean12, covar, mean1, mean2, var1, var2)
