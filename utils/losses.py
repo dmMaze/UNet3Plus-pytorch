@@ -27,18 +27,25 @@ class U3PLloss(nn.Module):
     def __init__(self, loss_type='focal', aux_weight=0.4):
         super().__init__()
         self.aux_weight = aux_weight
-        self.focal_loss = FocalLoss(ignore_index=255, size_average=True)
+        if loss_type == 'focal':
+            self.focal_loss = FocalLoss(ignore_index=255, size_average=True)
         self.loss_type = loss_type
 
     def forward(self, preds, targets):
+        loss_dict = {}
         if self.loss_type == 'focal':
-            loss_func = self.focal_loss
-
-        loss = loss_func(preds['final_pred'], targets)
-        for key in preds:
-            if 'aux' in key:
-                loss += loss_func(preds['final_pred'], targets) * self.aux_weight
-        return loss
+            # loss_func = self.focal_loss
+            loss = self.focal_loss(preds['final_pred'], targets)
+            loss_dict['focal_loss_head'] = loss.detach().item()
+            aux_loss = 0
+            for key in preds:
+                if 'aux' in key:
+                    aux_loss += self.focal_loss(preds['final_pred'], targets) * self.aux_weight
+            if aux_loss > 0:
+                loss_dict['focal_loss_aux'] = aux_loss.detach().item()
+                loss += aux_loss
+                loss_dict['total_loss'] = loss.detach().item()
+            return loss
 
 def build_loss(loss_type='focal', aux_weight=0.4, ) -> U3PLloss:
     return U3PLloss(loss_type, aux_weight)
