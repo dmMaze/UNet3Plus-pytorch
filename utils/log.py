@@ -1,9 +1,10 @@
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
-    def __init__(self, val):
+    def __init__(self, val=None):
         self.reset()
-        self.update(val)
+        if val is not None:
+            self.update(val)
 
     def reset(self):
         self.val = 0

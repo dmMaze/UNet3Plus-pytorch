@@ -39,7 +39,7 @@ cfg.train.accum_steps = 2
 cfg.train.resume = ''
 cfg.train.epochs = 120
 cfg.train.eval_interval = 1
-cfg.train.device = 'cuda'
+cfg.train.device = 'cpu'
 
 cfg.train.aux_weight = 0.4
 cfg.train.loss_type = 'focal'

@@ -1,6 +1,6 @@
 model:
   encoder: resnet18
-  skip_ch: 64
+  skip_ch: 32
   aux_losses: 2
   pretrained: false
 
@@ -8,8 +8,8 @@ data:
   type: voc2012_aug
   num_classes: 21
   num_workers: 4
-  batch_size: 16
-  max_training_samples: 3000
+  batch_size: 2
+  max_training_samples: 64
   
 train:
   seed: 42
@@ -19,6 +19,7 @@ train:
   optimizer: adamw
   accum_steps: 2
   resume: ''
+  device: cpu
 
   logger:
     tensorboard: True

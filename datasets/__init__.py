@@ -1,4 +1,7 @@
 from torch.utils.data import DataLoader
+from PIL import Image
+import torchvision.transforms.functional as F
+
 from . import ext_transforms as et
 from .voc import VOCSegmentation
 
@@ -7,7 +10,7 @@ from typing import Tuple
 def get_voc(data_root='./data', crop_size=512, crop_val=512, year='2012_aug', download=False):
     train_transform = et.ExtCompose([
         # et.ExtResize(size=crop_size),
-        et.ExtRandomScale((0.5, 2.0)),
+        et.ExtRandomScale((0.5, 2.0), interpolation=F.InterpolationMode.BILINEAR),
         et.ExtRandomCrop(size=(crop_size, crop_size), pad_if_needed=True),
         et.ExtRandomHorizontalFlip(),
         et.ExtToTensor(),
@@ -16,7 +19,8 @@ def get_voc(data_root='./data', crop_size=512, crop_val=512, year='2012_aug', do
     ])
     if crop_val:
         val_transform = et.ExtCompose([
-            et.ExtResize(crop_size),
+            # F.InterpolationMode.
+            et.ExtResize(crop_size, interpolation=F.InterpolationMode.BILINEAR),
             et.ExtCenterCrop(crop_size),
             et.ExtToTensor(),
             et.ExtNormalize(mean=[0.485, 0.456, 0.406],

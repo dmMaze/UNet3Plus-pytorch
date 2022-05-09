@@ -12,7 +12,7 @@ from model import build_unet3plus, UNet3Plus
 from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
-from utils.loss import build_loss
+from utils.losses import build_loss
 from utils.log import AverageMeter
 
 def one_cycle(y1=0.0, y2=1.0, steps=100):
@@ -96,6 +96,7 @@ class Trainer:
             self.warmup()
 
             imgs, masks = batch[0].to(device), batch[1].to(device, dtype=torch.long)
+            print(masks.shape)
             self.global_iter += batch_size
             with amp.autocast():
                 preds = model(imgs)
@@ -145,7 +146,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        default="config/u3p_resnet18_voc.yaml",
+                        default="config/test_voc.yaml",
                         type=str)
     parser.add_argument('--seed',
                         help='random seed',
