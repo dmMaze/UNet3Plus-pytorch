@@ -47,6 +47,9 @@ def build_data_loader(batch_size=1, num_workers=0, max_training_samples=-1) -> T
         max_training_samples = min(max_training_samples, num_samples)
         train_dataset.images = train_dataset.images[:max_training_samples]
         train_dataset.masks = train_dataset.masks[:max_training_samples]
+        max_val_samples = min(max_training_samples, len(val_dataset))
+        val_dataset.images = val_dataset.images[:max_val_samples]
+        val_dataset.masks = val_dataset.masks[:max_val_samples]
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, val_loader

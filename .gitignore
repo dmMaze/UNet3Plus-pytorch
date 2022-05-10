@@ -3,6 +3,7 @@
 *.tar
 temp.ipynb
 
+checkpoints
 logs
 VOC2012
 VOCdevkit

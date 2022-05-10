@@ -1,22 +1,27 @@
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from .focalloss import FocalLoss
 from .ms_ssimloss import MS_SSIMLoss, SSIMLoss
 from .iouloss import IoULoss
 
 class U3PLloss(nn.Module):
 
-    def __init__(self, loss_type='focal', aux_weight=0.4):
+    def __init__(self, loss_type='focal', aux_weight=0.4, process_input=True):
         super().__init__()
         self.aux_weight = aux_weight
         self.focal_loss = FocalLoss(ignore_index=255, size_average=True)  
         if loss_type == 'u3p':
-            self.iou_loss = IoULoss()
-            self.ms_ssim_loss = MS_SSIMLoss()
-        else:
+            self.iou_loss = IoULoss(process_input=not process_input)
+            self.ms_ssim_loss = MS_SSIMLoss(process_input=not process_input)
+        elif loss_type != 'focal':
             raise ValueError(f'Unknown loss type: {loss_type}')
         self.loss_type = loss_type
+        self.process_input = process_input
 
     def forward(self, preds, targets):
+        if not isinstance(preds, dict):
+            preds = {'final_pred': preds}
         if self.loss_type == 'focal':
             return self._forward_focal(preds, targets)
         elif self.loss_type == 'u3p':
@@ -40,10 +45,23 @@ class U3PLloss(nn.Module):
         
         return loss, loss_dict
 
+    def onehot_softmax(self, pred, target: torch.Tensor, process_target=True):
+        _, num_classes, h, w = pred.shape
+        pred = F.softmax(pred, dim=1)
+        # target
+        print(torch.max(target))
+        if process_target:
+            target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
+        return pred, target
+
+
     def _forward_u3p(self, preds, targets):
         r'''Full-scale Deep Supervision
         '''
+
         loss, loss_dict = self._forward_focal(preds, targets)
+        if self.process_input:
+            preds['final_pred'], targets = self.onehot_softmax(preds['final_pred'], targets)
         iou_loss = self.iou_loss(preds['final_pred'], targets)
         msssim_loss = self.ms_ssim_loss(preds['final_pred'], targets)
         loss = loss + iou_loss + msssim_loss
@@ -54,14 +72,19 @@ class U3PLloss(nn.Module):
         for key in preds:
             if 'aux' in key:
                 num_aux += 1
+                if self.process_input:
+                    preds[key], targets = self.onehot_softmax(preds[key], targets, process_target=False)
                 aux_iou_loss += self.iou_loss(preds[key], targets)
                 aux_msssim_loss += self.ms_ssim_loss(preds[key], targets)
         if num_aux > 0:
+            aux_iou_loss /= num_aux
+            aux_msssim_loss /= num_aux
             loss_dict['aux_iou_loss'] = aux_iou_loss.detach().item()
-            loss += (aux_iou_loss + aux_msssim_loss) * self.aux_weight / num_aux
+            loss_dict['aux_msssim_loss'] = aux_msssim_loss.detach().item()
+            loss += (aux_iou_loss + aux_msssim_loss) * self.aux_weight
             loss_dict['total_loss'] = loss.detach().item()
         
         return loss, loss_dict
 
-def build_loss(loss_type='focal', aux_weight=0.4, ) -> U3PLloss:
+def build_u3p_loss(loss_type='focal', aux_weight=0.4, ) -> U3PLloss:
     return U3PLloss(loss_type, aux_weight)

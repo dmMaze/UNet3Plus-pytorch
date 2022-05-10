@@ -38,11 +38,14 @@ cfg.train.nesterov = True
 cfg.train.accum_steps = 2
 cfg.train.resume = ''
 cfg.train.epochs = 120
-cfg.train.eval_interval = 1
-cfg.train.device = 'cpu'
+cfg.train.val_interval = 1
+cfg.train.device = 'cuda'
 
 cfg.train.aux_weight = 0.4
 cfg.train.loss_type = 'focal'
+
+cfg.train.save_name = 'unet3plus'
+cfg.train.save_dir = './checkpoints'
 
 # LOGGING
 cfg.train.logger = CN()

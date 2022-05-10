@@ -3,17 +3,14 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch import Tensor
 
-USE_JIT = True
+CUDA_LAUNCH_BLOCKING=1
+USE_JIT = False
 relu = nn.ReLU(inplace=True)
 
 if USE_JIT:
     _jit = torch.jit.script
-    _jit_method = torch.jit.script_method
-    Module = torch.jit.ScriptModule
 else:
     _jit = lambda f: f
-    _jit_method = lambda f: f
-    Module = nn.Module
 
 @_jit
 def gaussian_kernel(kernel_size: int, sigma: float):
@@ -124,7 +121,7 @@ def ms_ssim(
     return msss
 
 
-class SSIMLoss(Module):
+class SSIMLoss(nn.Module):
     r""" Multi label SIMM Loss for segmentation
 
     Args:
@@ -142,7 +139,6 @@ class SSIMLoss(Module):
         self.win_size = win_size
         self.nonnegative = nonnegative
 
-    @_jit_method
     def forward(self, pred: Tensor, target: Tensor):
         _, h, w = target.shape
         win_size = min(h, w, self.win_size)
@@ -161,35 +157,36 @@ class SSIMLoss(Module):
         return loss / num_classes
 
 
-class MS_SSIMLoss(Module):
+class MS_SSIMLoss(nn.Module):
     r""" Multi label SIMM Loss for segmentation
      """
     def __init__(self, 
                  win_size: int = 11, 
                  weights: Tensor = torch.tensor([0.0448, 0.2856, 0.3001, 0.2363, 0.1333]), 
-                 nonnegative: bool = True):
+                 nonnegative: bool = True,
+                 process_input: bool = True):
 
         super(MS_SSIMLoss, self).__init__()
-        self.kernel = gaussian_kernel2d(win_size, 1)
-        self.weights = weights
+        self.kernel = gaussian_kernel2d(win_size, 1).cuda()
+        self.weights = weights.half()
         self.win_size = win_size
         self.nonnegative = nonnegative
+        self.process_input = process_input
 
-    @_jit_method
     def forward(self, pred: Tensor, target: Tensor):
-        _, h, w = target.shape
+        _, num_classes, h, w = pred.shape
         win_size = min(h, w, self.win_size)
         kernel = self.kernel if win_size == self.win_size else gaussian_kernel2d(win_size, 1)
-        if kernel.device != pred.device:
-            kernel.to(pred.device)
+        # if kernel.device != pred.device:
+        #     kernel.to(pred.device)
         
-        pred = F.softmax(pred, dim=1)
-        num_classes = pred.shape[1]
-        target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
-        weights = self.weights
+        if self.process_input:
+            pred = F.softmax(pred, dim=1)
+            target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
+
         loss = 0.
         for i in range(num_classes):
-            ss = ms_ssim(pred[:, [i]], target[:, [i]], kernel, weights, nonnegative=self.nonnegative)
+            ss = ms_ssim(pred[:, [i]], target[:, [i]], kernel, self.weights, nonnegative=self.nonnegative)
             loss += 1. - ss.mean()
         return loss / num_classes
 

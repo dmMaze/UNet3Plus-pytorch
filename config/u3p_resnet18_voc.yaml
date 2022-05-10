@@ -8,20 +8,24 @@ data:
   type: voc2012_aug
   num_classes: 21
   num_workers: 4
-  batch_size: 32
+  batch_size: 16
+  max_training_samples: 100
   
 train:
   seed: 42
   num_epochs: 20
   lr: 0.001
   weight_decay: 0.0001
-  optimizer: sgd
+  optimizer: adamw
   accum_steps: 2
   resume: ''
+  save_dir: ./checkpoints/
+  save_name: u3p_resnet18_voc
+  loss_type: u3p
 
   logger:
     tensorboard: True
-    log_dir: ./logs/
+    log_dir: ./logs
 
 
   

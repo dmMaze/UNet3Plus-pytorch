@@ -2,14 +2,14 @@ model:
   encoder: resnet18
   skip_ch: 32
   aux_losses: 2
-  pretrained: false
+  pretrained: True
 
 data:
   type: voc2012_aug
   num_classes: 21
   num_workers: 4
-  batch_size: 2
-  max_training_samples: 64
+  batch_size: 16
+  max_training_samples: 100
   
 train:
   seed: 42
@@ -19,7 +19,8 @@ train:
   optimizer: adamw
   accum_steps: 2
   resume: ''
-  device: cpu
+  device: cuda
+  loss_type: u3p
 
   logger:
     tensorboard: True

@@ -2,6 +2,8 @@ import argparse
 import math
 from tqdm import tqdm
 import numpy as np
+import os
+import os.path as osp
 
 import torch
 from torch.optim import SGD, Adam, AdamW, lr_scheduler
@@ -12,8 +14,9 @@ from model import build_unet3plus, UNet3Plus
 from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
-from utils.losses.losses import build_loss
+from utils.loss import build_u3p_loss
 from utils.log import AverageMeter
+from utils.metrics import StreamSegMetrics
 
 def one_cycle(y1=0.0, y2=1.0, steps=100):
     return lambda x: ((1 - math.cos(x * math.pi / steps)) / 2) * (y2 - y1) + y1
@@ -23,16 +26,29 @@ class Trainer:
     global_iter = 0
     start_epoch = 0
     epoch = 0   # current epoch
-    loss = AverageMeter()
+    loss_dict = dict()
+    val_loss_dict = dict()
+    val_score_dict = None
+    best_val_score_dict = None
     
     def __init__(self, cfg, model, train_loader, val_loader):
-        self.cfg = cfg
+        self.cfg_all = cfg
+
+        # build metrics
+        self.metrics = StreamSegMetrics(cfg.data.num_classes)
+
+        os.makedirs(cfg.train.save_dir, exist_ok=True)
+        hyp_path = osp.join(cfg.train.save_dir, cfg.train.save_name+'.yaml')
+        with open(hyp_path, "w") as f: 
+            f.write(cfg.dump())
+
+        cfg = self.cfg = cfg.train
         self.model: UNet3Plus = model
         self.train_loader: DataLoader = train_loader
         self.val_loader: DataLoader = val_loader
 
         # build loss
-        self.loss_func = build_loss(cfg.loss_type, cfg.aux_weight)
+        self.criterion = build_u3p_loss(cfg.loss_type, cfg.aux_weight)
         self.scaler = amp.GradScaler(enabled=cfg.device == 'cuda')  # mixed precision training
 
         # build optimizer
@@ -61,7 +77,7 @@ class Trainer:
 
         if cfg.resume:
             self.resume(cfg.resume)
-        
+
         self.model.to(cfg.device)
         
     def resume(self, resume_path):
@@ -77,39 +93,57 @@ class Trainer:
 
     def train(self):
         for epoch in range(self.start_epoch, self.cfg.epochs):
-            self.train_epoch(epoch)
+            self.train_one_epoch()
+            self.end_train_epoch()
 
-
-    def train_epoch(self, epoch):
+    def train_one_epoch(self):
         model = self.model
+        model.train()
         device = self.cfg.device
         pbar = enumerate(self.train_loader)
         num_batches = len(self.train_loader)
         batch_size = self.train_loader.batch_size
         accum_steps = self.cfg.accum_steps
-
-        self.loss.reset()
-
-        pbar = tqdm(pbar, total=num_batches, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
         
+        pbar = tqdm(pbar, total=num_batches, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
         for i, batch in pbar:
             self.warmup()
-
             imgs, masks = batch[0].to(device), batch[1].to(device, dtype=torch.long)
-            print(masks.shape)
             self.global_iter += batch_size
             with amp.autocast():
                 preds = model(imgs)
             
-            loss = self.loss_func(preds, masks)
-            self.loss.update(loss.detach().item())
+            loss, batch_loss_dict = self.criterion(preds, masks)
+            self.update_loss_dict(self.loss_dict, batch_loss_dict)
             self.scaler.scale(loss / accum_steps).backward()
             if (i+1) % accum_steps == 0:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
 
+        pbar.close()
+
+    def end_train_epoch(self):
         self.epoch += 1
+        if self.epoch % self.cfg.val_interval == 0 or self.epoch == self.cfg.epochs:
+            val_dict = self.val_score_dict = self.validate()
+            miou = val_dict['Mean IoU']
+            if self.best_val_score_dict is None or miou > self.best_val_score_dict['Mean IoU']:
+                self.best_val_score_dict = val_dict
+                self.save_checkpoint(self.cfg.save_name + '_best.ckpt')
+            self.log_results()
+        self.save_checkpoint(self.cfg.save_name + '_last.ckpt')
+        self.scheduler.step()
+    
+    def save_checkpoint(self, save_name):
+        state = {
+            'epoch': self.epoch,
+            'global_iter': self.global_iter,
+            'state_dict': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'scheduler': self.scheduler.state_dict(),
+        }
+        torch.save(state, osp.join(self.cfg.save_dir, save_name))
 
     def warmup(self):
         ni = self.global_iter
@@ -120,6 +154,64 @@ class Trainer:
                 if 'momentum' in x:
                     x['momentum'] = np.interp(ni, xi, [0.8, self.cfg.momentum])
 
+    def update_loss_dict(self, loss_dict, batch_loss_dict=None):
+        if batch_loss_dict is None:
+            if loss_dict is None:
+                return
+            for k in loss_dict:
+                loss_dict[k].reset()
+        elif len(loss_dict) == 0:
+            for k, v in batch_loss_dict.items():
+                loss_dict[k] = AverageMeter(val=v)
+        else:
+            for k, v in batch_loss_dict.items():
+                loss_dict[k].update(v)
+
+    def log_results(self):
+        if self.writer is not None:
+            for k, v in self.loss_dict.items():
+                self.writer.add_scalars('Train_metrics/' + k, {"Train": v.avg}, self.global_iter)
+            self.update_loss_dict(self.loss_dict, None)     # clean loss meters
+            lr = self.optimizer.param_groups[0]['lr']
+            self.writer.add_scalars('Train_metrics/lr', {"lr": lr}, self.global_iter)
+
+            for k, v in self.val_loss_dict.items():
+                self.writer.add_scalars('Val_metrics/' + k, {"Val": v.avg}, self.global_iter)
+            self.update_loss_dict(self.val_loss_dict, None)
+            
+            for k, v in self.val_score_dict.items():
+                if k == 'Class IoU':
+                    continue
+                self.writer.add_scalars('Val_metrics/' + k, {"Val": v}, self.global_iter)
+            self.writer.flush()
+
+
+    def validate(self):
+        """Do validation and return specified samples"""
+        self.metrics.reset()
+        self.model.eval()
+        device = self.cfg.device
+        pbar = enumerate(self.val_loader)
+        pbar = tqdm(pbar, total=len(self.val_loader), bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
+        with torch.no_grad():
+
+            for i, (images, labels) in pbar:
+
+                images = images.to(device)
+                labels = labels.to(device, dtype=torch.long)
+
+                outputs = self.model(images)
+                
+                preds = outputs.detach().max(dim=1)[1].cpu().numpy()
+                targets = labels.cpu().numpy()
+                self.metrics.update(targets, preds)
+
+                _, batch_loss_dict = self.criterion(outputs, labels)
+                self.update_loss_dict(self.val_loss_dict, batch_loss_dict)
+
+            score = self.metrics.get_results()
+            pbar.close()
+        return score
 
 def main(args):
 
@@ -128,6 +220,7 @@ def main(args):
         cfg.train.seed = int(args.seed)
     if args.resume:
         cfg.train.resume = args.resume
+
     cfg.freeze()
     print(cfg)
     model, data = cfg.model, cfg.data
@@ -138,7 +231,7 @@ def main(args):
     else:
         raise NotImplementedError
     
-    trainer = Trainer(cfg.train, model, train_loader, val_loader)
+    trainer = Trainer(cfg, model, train_loader, val_loader)
     trainer.train()
 
 if __name__ == '__main__':
@@ -146,7 +239,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        default="config/test_voc.yaml",
+                        default="config/u3p_resnet18_voc.yaml",
                         type=str)
     parser.add_argument('--seed',
                         help='random seed',
