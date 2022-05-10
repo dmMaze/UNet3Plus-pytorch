@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch import Tensor
 
 USE_JIT = True
+relu = nn.ReLU(inplace=True)
 
 if USE_JIT:
     _jit = torch.jit.script
@@ -13,8 +14,6 @@ else:
     _jit = lambda f: f
     _jit_method = lambda f: f
     Module = nn.Module
-
-relu = nn.ReLU(inplace=True)
 
 @_jit
 def gaussian_kernel(kernel_size: int, sigma: float):
@@ -196,13 +195,6 @@ class MS_SSIMLoss(Module):
 
 if __name__ == '__main__':
     
-    # img1 = torch.randint(0, 2, (2, 3, 100, 100), dtype=torch.float)
-    # img2 = torch.randint(0, 2, (2, 3, 100, 100), dtype=torch.float)
-    # # ssim
-    # ssim1 = ssim(img1, img2)
-    # ssim2 = ssim_index(img1, img2, nonnegative=False, kernel=w)
-    # print(ssim1, ssim2)
-
     pred = torch.randn((6, 21, 256, 256))
     target = torch.randint(0, 21, (6, 256, 256))
     criterion = SSIMLoss()

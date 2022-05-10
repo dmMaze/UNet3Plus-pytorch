@@ -12,7 +12,7 @@ from model import build_unet3plus, UNet3Plus
 from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
-from utils.losses import build_loss
+from utils.losses.losses import build_loss
 from utils.log import AverageMeter
 
 def one_cycle(y1=0.0, y2=1.0, steps=100):
