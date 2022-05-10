@@ -98,21 +98,32 @@ class U3PEncoderDefault(nn.Module):
 class U3PDecoder(nn.Module):
     def __init__(self, en_channels = [64, 128, 256, 512, 1024], skip_ch=64):
         super().__init__()
-        self.decoder_layers = nn.ModuleList()
-        num_fssc = len(en_channels) - 1    # number of Full-scale Skip Connections layers
+        self.decoders = nn.ModuleDict()
         en_channels = en_channels[::-1]
-        for ii in range(num_fssc):
-            en_start_idx = ii + 1
-            num_dec = en_start_idx
-            self.decoder_layers.append(FullScaleSkipConnect(en_channels[en_start_idx:], num_dec, skip_ch, bottom_dec_ch=en_channels[0]))
+        for ii in range(len(en_channels)):
+            if ii == 0:
+                # first decoding output is identity mapping of last encoder map
+                self.decoders['decoder1'] = nn.Identity()
+                continue
+            self.decoders[f'decoder{ii+1}'] = FullScaleSkipConnect(
+                                                en_channels[ii:], 
+                                                num_dec=ii, 
+                                                skip_ch=skip_ch, 
+                                                bottom_dec_ch=en_channels[0]
+                                            )
 
     def forward(self, enc_map_list:List[torch.Tensor]):
-        dec_map_list = [enc_map_list.pop()]
+        dec_map_list = []
         enc_map_list = enc_map_list[::-1]
         layer: FullScaleSkipConnect
-        for ii, layer in enumerate(self.decoder_layers):
+        for ii, layer_key in enumerate(self.decoders):
+            layer = self.decoders[layer_key]
+            if ii == 0:
+                dec_map_list.append(layer(enc_map_list[0]))
+                continue
             dec_map_list.append(layer(enc_map_list[ii: ], dec_map_list))
         return dec_map_list
+
 
 class UNet3Plus(nn.Module):
 
@@ -127,8 +138,8 @@ class UNet3Plus(nn.Module):
 
         self.encoder = U3PEncoderDefault(channels) if encoder is None else encoder
         channels = self.encoder.channels
-        num_decoder_layers = len(channels) - 1
-        decoder_ch = skip_ch * num_decoder_layers
+        num_decoders = len(channels) - 1
+        decoder_ch = skip_ch * num_decoders
 
         self.decoder = U3PDecoder(self.encoder.channels[1:], skip_ch=skip_ch)
         self.decoder.apply(weight_init)
@@ -145,7 +156,7 @@ class UNet3Plus(nn.Module):
 
         if aux_losses > 0:
             self.aux_head = nn.ModuleDict()
-            layer_indices = np.arange(num_decoder_layers - aux_losses - 1, num_decoder_layers - 1)
+            layer_indices = np.arange(num_decoders - aux_losses - 1, num_decoders - 1)
             for ii in layer_indices:
                 ch = decoder_ch if ii != 0 else channels[-1]
                 self.aux_head.add_module(f'aux_head{ii}', nn.Conv2d(ch, num_classes, 3, padding=1))
