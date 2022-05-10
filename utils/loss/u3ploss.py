@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .focalloss import FocalLoss
 from .ms_ssimloss import MS_SSIMLoss, SSIMLoss
+from .piqa_ssim import SSIM
 from .iouloss import IoULoss
 
 class U3PLloss(nn.Module):
@@ -13,7 +14,9 @@ class U3PLloss(nn.Module):
         self.focal_loss = FocalLoss(ignore_index=255, size_average=True)  
         if loss_type == 'u3p':
             self.iou_loss = IoULoss(process_input=not process_input)
-            self.ms_ssim_loss = MS_SSIMLoss(process_input=not process_input)
+            # self.ms_ssim_loss = MS_SSIMLoss(process_input=not process_input)
+            self.ms_ssim_loss = SSIMLoss(process_input=not process_input)
+            # self.ms_ssim_loss = SSIM()
         elif loss_type != 'focal':
             raise ValueError(f'Unknown loss type: {loss_type}')
         self.loss_type = loss_type
@@ -48,10 +51,10 @@ class U3PLloss(nn.Module):
     def onehot_softmax(self, pred, target: torch.Tensor, process_target=True):
         _, num_classes, h, w = pred.shape
         pred = F.softmax(pred, dim=1)
-        # target
-        print(torch.max(target))
+        
         if process_target:
-            target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
+            target = torch.clamp(target, 0, num_classes)
+            target = F.one_hot(target, num_classes=num_classes+1)[..., :num_classes].permute(0, 3, 1, 2).contiguous().to(pred.dtype)
         return pred, target
 
 
@@ -61,9 +64,9 @@ class U3PLloss(nn.Module):
 
         loss, loss_dict = self._forward_focal(preds, targets)
         if self.process_input:
-            preds['final_pred'], targets = self.onehot_softmax(preds['final_pred'], targets)
-        iou_loss = self.iou_loss(preds['final_pred'], targets)
-        msssim_loss = self.ms_ssim_loss(preds['final_pred'], targets)
+            final_pred, targets = self.onehot_softmax(preds['final_pred'], targets)
+        iou_loss = self.iou_loss(final_pred, targets)
+        msssim_loss = self.ms_ssim_loss(final_pred, targets)
         loss = loss + iou_loss + msssim_loss
         loss_dict['head_iou_loss'] = iou_loss.detach().item()
         loss_dict['head_msssim_loss'] = msssim_loss.detach().item()

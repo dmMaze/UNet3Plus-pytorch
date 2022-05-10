@@ -1,5 +1,5 @@
 model:
-  encoder: resnet18
+  encoder: resnet34
   skip_ch: 64
   aux_losses: 2
   pretrained: True
@@ -13,16 +13,16 @@ data:
   
 train:
   seed: 42
-  num_epochs: 20
-  lr: 0.001
-  weight_decay: 0.0001
+  num_epochs: 120
+  lr: 0.01
+  weight_decay: 0.00001
   optimizer: adamw
   accum_steps: 4
   resume: ''
   save_dir: ./checkpoints/
   save_name: u3p_resnet34_voc
   loss_type: focal
-  warmup_iters: 1
+  warmup_iters: 1000
 
   logger:
     tensorboard: True

@@ -48,18 +48,20 @@ def ssim_index(img1: Tensor,
         img2 = img2.float()
     L = val_range
 
-    mean1 = F.conv2d(img1, kernel, padding=0, groups=channel)
-    mean2 = F.conv2d(img2, kernel, padding=0, groups=channel)
+    s = 1
+    p = 0
+    mean1 = F.conv2d(img1, kernel, padding=p, groups=channel, stride=s)
+    mean2 = F.conv2d(img2, kernel, padding=p, groups=channel, stride=s)
     mean12 = mean1 * mean2
-    mean1.pow_(2)
-    mean2.pow_(2)
+    mean1 = mean1.pow(2)
+    mean2 = mean2.pow(2)
     
     # https://en.wikipedia.org/wiki/Variance#Definition
-    var1 = F.conv2d(img1 ** 2, kernel, padding=0, groups=channel) - mean1
-    var2 = F.conv2d(img2 ** 2, kernel, padding=0, groups=channel) - mean2
+    var1 = F.conv2d(img1 ** 2, kernel, padding=p, groups=channel, stride=s) - mean1
+    var2 = F.conv2d(img2 ** 2, kernel, padding=p, groups=channel, stride=s) - mean2
 
     # https://en.wikipedia.org/wiki/Covariance#Definition
-    covar = F.conv2d(img1 * img2, kernel, padding=0, groups=channel) - mean12
+    covar = F.conv2d(img1 * img2, kernel, padding=p, groups=channel, stride=s) - mean12
 
     c1 = (0.01 * L) ** 2
     c2 = (0.03 * L) ** 2
@@ -69,6 +71,7 @@ def ssim_index(img1: Tensor,
     # print(covar.mean(), var1.mean(), var2.mean(), cs.mean())  # sparse input could result in large cs
     ss = (2. * mean12 + c1) / (mean1 + mean2 + c1) * cs
 
+    
     if channel_avg:
         ss, cs = ss.flatten(1), cs.flatten(1)
     else:
@@ -132,23 +135,23 @@ class SSIMLoss(nn.Module):
         - Input (Tensor): :math:`(B, num_classes, H, W)`, predicted probablity maps
         - Target (Tensor): :math:`(B, H, W)`, range from 0 to num_classes - 1
     """
-    def __init__(self, win_size: int = 11, nonnegative: bool = True):
+    def __init__(self, win_size: int = 11, nonnegative: bool = True, process_input: bool = True):
 
         super(SSIMLoss, self).__init__()
         self.kernel = gaussian_kernel2d(win_size, 1)
         self.win_size = win_size
         self.nonnegative = nonnegative
+        self.process_input = process_input
 
     def forward(self, pred: Tensor, target: Tensor):
-        _, h, w = target.shape
+        _, num_classes, h, w = pred.shape
         win_size = min(h, w, self.win_size)
         kernel = self.kernel if win_size == self.win_size else gaussian_kernel2d(win_size, 1)
-        if kernel.device != pred.device:
-            kernel.to(pred.device)
+        kernel = kernel.to(pred.dtype).to(pred.device)
         
-        pred = F.softmax(pred, dim=1)
-        num_classes = pred.shape[1]
-        target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
+        if self.process_input:
+            pred = F.softmax(pred, dim=1)
+            target = F.one_hot(target, num_classes=num_classes).permute(0, 3, 1, 2).float()
         
         loss = 0.
         for i in range(num_classes):
@@ -167,8 +170,8 @@ class MS_SSIMLoss(nn.Module):
                  process_input: bool = True):
 
         super(MS_SSIMLoss, self).__init__()
-        self.kernel = gaussian_kernel2d(win_size, 1).cuda()
-        self.weights = weights.half()
+        self.kernel = gaussian_kernel2d(win_size, 1)
+        self.weights = weights
         self.win_size = win_size
         self.nonnegative = nonnegative
         self.process_input = process_input
@@ -177,6 +180,9 @@ class MS_SSIMLoss(nn.Module):
         _, num_classes, h, w = pred.shape
         win_size = min(h, w, self.win_size)
         kernel = self.kernel if win_size == self.win_size else gaussian_kernel2d(win_size, 1)
+
+        kernel = kernel.to(pred.dtype)
+        weights = self.weights.to(pred.dtype).to(pred.device)
         # if kernel.device != pred.device:
         #     kernel.to(pred.device)
         
@@ -186,7 +192,7 @@ class MS_SSIMLoss(nn.Module):
 
         loss = 0.
         for i in range(num_classes):
-            ss = ms_ssim(pred[:, [i]], target[:, [i]], kernel, self.weights, nonnegative=self.nonnegative)
+            ss = ms_ssim(pred[:, [i]], target[:, [i]], kernel, weights, nonnegative=self.nonnegative)
             loss += 1. - ss.mean()
         return loss / num_classes
 

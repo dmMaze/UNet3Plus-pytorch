@@ -14,11 +14,11 @@ resnet_cfg = {
         'layer1': 'layer1',
         'layer2': 'layer2',
         'layer3': 'layer3',
-        'layer4': 'layer4',
+        # 'layer4': 'layer4',
     },
     'resnet18': {
-        'fe_channels': [64, 64, 128, 256, 512],
-        'channels': [32, 64, 128, 256, 512],
+        'fe_channels': [64, 64, 128, 256],
+        'channels': [32, 64, 128, 256],
     },
     'resnet50': {
         'fe_channels': [64, 256, 512, 1024, 2048],

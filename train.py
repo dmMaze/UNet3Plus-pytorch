@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
 
 from model import build_unet3plus, UNet3Plus
+from model.unet3plusoriginal import UNet_3Plus_DeepSup
 from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
@@ -49,7 +50,7 @@ class Trainer:
 
         # build loss
         self.criterion = build_u3p_loss(cfg.loss_type, cfg.aux_weight)
-        self.scaler = amp.GradScaler(enabled=cfg.device == 'cuda')  # mixed precision training
+        self.scaler = amp.GradScaler(enabled=True)  # mixed precision training
 
         # build optimizer
         if cfg.optimizer == 'sgd':
@@ -75,14 +76,14 @@ class Trainer:
         else:
             self.writer = None
 
+        self.model.to(cfg.device)
         if cfg.resume:
             self.resume(cfg.resume)
-
-        self.model.to(cfg.device)
+        
         
     def resume(self, resume_path):
         print('resuming from {}'.format(resume_path))
-        saved = torch.load(resume_path, map_location='cpu')
+        saved = torch.load(resume_path, map_location=self.cfg.device)
         self.model.load_state_dict(saved['state_dict'])
         self.optimizer.load_state_dict(saved['optimizer'])
         self.scheduler.load_state_dict(saved['scheduler'])
@@ -106,21 +107,26 @@ class Trainer:
         accum_steps = self.cfg.accum_steps
         
         pbar = tqdm(pbar, total=num_batches, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
+        # with torch.profiler.profile(
+        #         schedule=torch.profiler.schedule(wait=1, warmup=1, active=5),
+        #         on_trace_ready=torch.profiler.tensorboard_trace_handler(self.cfg.logger.log_dir),
+        #         record_shapes=True
+        # ) as prof:
         for i, batch in pbar:
             self.warmup()
             imgs, masks = batch[0].to(device), batch[1].to(device, dtype=torch.long)
             self.global_iter += batch_size
             with amp.autocast():
                 preds = model(imgs)
-            
-            loss, batch_loss_dict = self.criterion(preds, masks)
+                loss, batch_loss_dict = self.criterion(preds, masks)
             self.update_loss_dict(self.loss_dict, batch_loss_dict)
-            self.scaler.scale(loss / accum_steps).backward()
-            if (i+1) % accum_steps == 0:
+            self.scaler.scale(loss).backward()
+            if (i+1) % accum_steps == 0 or i == num_batches - 1:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
-
+                    # prof.step()
+        # self.scheduler.step()
         pbar.close()
 
     def end_train_epoch(self):
@@ -225,7 +231,7 @@ def main(args):
     print(cfg)
     model, data = cfg.model, cfg.data
     model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained)
-    
+    # model = UNet_3Plus_DeepSup()
     if data.type in ['voc2012', 'voc2012_aug']:
         train_loader, val_loader = build_data_loader(data.batch_size, data.num_workers, data.max_training_samples)
     else:
@@ -239,7 +245,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        default="config/u3p_resnet18_voc.yaml",
+                        default="config/u3p_resnet34_voc.yaml",
                         type=str)
     parser.add_argument('--seed',
                         help='random seed',

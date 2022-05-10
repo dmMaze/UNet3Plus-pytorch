@@ -1,14 +1,14 @@
 model:
   encoder: resnet18
-  skip_ch: 32
-  aux_losses: 2
+  skip_ch: 16
+  aux_losses: -1
   pretrained: True
 
 data:
   type: voc2012_aug
   num_classes: 21
   num_workers: 4
-  batch_size: 16
+  batch_size: 8
   max_training_samples: 100
   
 train:

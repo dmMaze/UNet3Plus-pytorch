@@ -7,7 +7,8 @@ from .voc import VOCSegmentation
 
 from typing import Tuple
 
-def get_voc(data_root='./data', crop_size=512, crop_val=512, year='2012_aug', download=False):
+SIZE = 512
+def get_voc(data_root='./data', crop_size=SIZE, crop_val=SIZE, year='2012_aug', download=False):
     train_transform = et.ExtCompose([
         # et.ExtResize(size=crop_size),
         et.ExtRandomScale((0.5, 2.0), interpolation=F.InterpolationMode.BILINEAR),
