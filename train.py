@@ -149,8 +149,16 @@ class Trainer:
 
     def warmup(self):
         ni = self.global_iter
-        if ni <= self.cfg.warmup_iters:
-            xi = [0, self.cfg.warmup_iters]  # x interp
+        # if ni <= self.cfg.warmup_iters:
+        #     xi = [0, self.cfg.warmup_iters]  # x interp
+        #     for j, x in enumerate(self.optimizer.param_groups):
+        #         x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * self.lr_func(self.epoch)])
+        #         if 'momentum' in x:
+        #             x['momentum'] = np.interp(ni, xi, [0.8, self.cfg.momentum])
+
+        warmup_iters = max(self.cfg.warmup_iters, len(self.train_loader.dataset) * 3)
+        if ni <= warmup_iters:
+            xi = [0, warmup_iters]  # x interp
             for j, x in enumerate(self.optimizer.param_groups):
                 x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * self.lr_func(self.epoch)])
                 if 'momentum' in x:
@@ -235,6 +243,16 @@ def main(args):
         cfg.train.logger.use_wandb = args.use_wandb == 1
     cfg.freeze()
     print(cfg)
+
+    import torch
+    import random
+    import numpy as np
+    seed = 42
+    torch.cuda.manual_seed_all(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
     model, data = cfg.model, cfg.data
     model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained)
     # model = UNet_3Plus_DeepSup()

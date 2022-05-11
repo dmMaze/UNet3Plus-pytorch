@@ -28,7 +28,7 @@ cfg.train.num_epochs = 10
 
 cfg.train.lr = 0.001
 cfg.train.lrf = 0.0005  # final lr
-cfg.train.scheduler = 'linear'
+cfg.train.scheduler = 'cyclic'
 cfg.train.warmup_iters = 500
 
 cfg.train.optimizer = 'adamw'
@@ -50,7 +50,7 @@ cfg.train.save_dir = './checkpoints'
 
 # LOGGING
 cfg.train.logger = CN()
-cfg.train.logger.log_dir = './logs'
+cfg.train.logger.log_dir = './runs/UnetV3Plus'
 
 # tensorboard setting
 cfg.train.logger.use_tensorboard = True
