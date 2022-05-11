@@ -14,7 +14,8 @@ cfg.model.aux_losses = 2
 # DATA
 cfg.data = CN()
 cfg.data.type = 'voc2012_aug'
-cfg.data_root = './data'
+cfg.data.data_dir = './data'
+cfg.data.crop_size = 512
 cfg.data.num_classes = 21
 cfg.data.batch_size = 1
 cfg.data.num_workers = 0
@@ -50,5 +51,15 @@ cfg.train.save_dir = './checkpoints'
 # LOGGING
 cfg.train.logger = CN()
 cfg.train.logger.log_dir = './logs'
-cfg.train.logger.tensorboard = True
+
+# tensorboard setting
+cfg.train.logger.use_tensorboard = True
+cfg.train.logger.tensorboard = CN()
+
+# wandb setting
+cfg.train.logger.use_wandb = False
+cfg.train.logger.wandb = CN()
+cfg.train.logger.wandb.project = 'UNet3Plus'
+cfg.train.logger.wandb.run_id = ''
+
 

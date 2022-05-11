@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
 from utils.loss import build_u3p_loss
-from utils.log import AverageMeter
+from utils.logging import AverageMeter, SummaryLogger
 from utils.metrics import StreamSegMetrics
 
 def one_cycle(y1=0.0, y2=1.0, steps=100):
@@ -50,7 +50,7 @@ class Trainer:
 
         # build loss
         self.criterion = build_u3p_loss(cfg.loss_type, cfg.aux_weight)
-        self.scaler = amp.GradScaler(enabled=True)  # mixed precision training
+        self.scaler = amp.GradScaler(enabled=cfg.device == 'cuda')  # mixed precision training
 
         # build optimizer
         if cfg.optimizer == 'sgd':
@@ -71,10 +71,7 @@ class Trainer:
         # build scheduler
         self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lr_func)
 
-        if cfg.logger.tensorboard:
-            self.writer = SummaryWriter(log_dir=cfg.logger.log_dir)
-        else:
-            self.writer = None
+        self.logger = SummaryLogger(self.cfg_all)
 
         self.model.to(cfg.device)
         if cfg.resume:
@@ -174,22 +171,27 @@ class Trainer:
                 loss_dict[k].update(v)
 
     def log_results(self):
-        if self.writer is not None:
-            for k, v in self.loss_dict.items():
-                self.writer.add_scalars('Train_metrics/' + k, {"Train": v.avg}, self.global_iter)
-            self.update_loss_dict(self.loss_dict, None)     # clean loss meters
-            lr = self.optimizer.param_groups[0]['lr']
-            self.writer.add_scalars('Train_metrics/lr', {"lr": lr}, self.global_iter)
+        log_dict = {
+            'Train': {},
+            'Val': {}
+        }
 
-            for k, v in self.val_loss_dict.items():
-                self.writer.add_scalars('Val_metrics/' + k, {"Val": v.avg}, self.global_iter)
-            self.update_loss_dict(self.val_loss_dict, None)
-            
-            for k, v in self.val_score_dict.items():
-                if k == 'Class IoU':
-                    continue
-                self.writer.add_scalars('Val_metrics/' + k, {"Val": v}, self.global_iter)
-            self.writer.flush()
+        for k, v in self.loss_dict.items():
+            log_dict['Train'][k] = v.avg
+        self.update_loss_dict(self.loss_dict, None)
+        log_dict['Train']['lr'] = self.optimizer.param_groups[0]['lr']
+
+        for k, v in self.val_loss_dict.items():
+            log_dict['Val'][k] = v.avg
+        self.update_loss_dict(self.val_loss_dict, None)
+        
+        for k, v in self.val_score_dict.items():
+            if k == 'Class IoU':
+                print(v)
+                # self.logger.cmd_logger.info(v)
+                continue
+            log_dict['Val'][k] = v
+        self.logger.summary(log_dict, self.global_iter)
 
 
     def validate(self):
@@ -226,6 +228,7 @@ def main(args):
         cfg.train.seed = int(args.seed)
     if args.resume:
         cfg.train.resume = args.resume
+    cfg.data.data_dir = args.data_dir
 
     cfg.freeze()
     print(cfg)
@@ -233,7 +236,7 @@ def main(args):
     model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained)
     # model = UNet_3Plus_DeepSup()
     if data.type in ['voc2012', 'voc2012_aug']:
-        train_loader, val_loader = build_data_loader(data.batch_size, data.num_workers, data.max_training_samples)
+        train_loader, val_loader = build_data_loader(data.data_dir, data.batch_size, data.num_workers, data.max_training_samples)
     else:
         raise NotImplementedError
     
@@ -253,6 +256,9 @@ if __name__ == '__main__':
     parser.add_argument('--resume',
                         help='resume from checkpoint',
                         default='',
+                        type=str)
+    parser.add_argument('--data_dir',
+                        default="./data",
                         type=str)
 
     args = parser.parse_args()

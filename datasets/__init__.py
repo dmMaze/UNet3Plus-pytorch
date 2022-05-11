@@ -40,8 +40,8 @@ def get_voc(data_root='./data', crop_size=SIZE, crop_val=SIZE, year='2012_aug', 
 
     return train_dst, val_dst
 
-def build_data_loader(batch_size=1, num_workers=0, max_training_samples=-1) -> Tuple[DataLoader, DataLoader]:
-    train_dataset, val_dataset = get_voc()
+def build_data_loader(data_root='./data', batch_size=1, num_workers=0, max_training_samples=-1, crop_size=512) -> Tuple[DataLoader, DataLoader]:
+    train_dataset, val_dataset = get_voc(data_root, crop_size=crop_size, crop_val=crop_size)
     if max_training_samples > 0:    # for testing
         num_samples = len(train_dataset)
         train_dataset.image_set

@@ -26,6 +26,7 @@ def en2dec_layer(in_ch, out_ch, scale):
 def dec2dec_layer(in_ch, out_ch, scale, efficient=False):
     up = [nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True) if scale != 1 else nn.Identity()]
     m = [u3pblock(in_ch, out_ch, num_block=1)]
+    efficient = True
     if efficient:
         m = m + up
     else:

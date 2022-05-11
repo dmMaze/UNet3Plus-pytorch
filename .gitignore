@@ -1,10 +1,12 @@
 *.ckpt
 *.pt
 *.tar
+*.zip
 temp.ipynb
 
 checkpoints
 logs
+wandb
 VOC2012
 VOCdevkit
 __pycache__

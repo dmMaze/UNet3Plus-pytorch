@@ -7,9 +7,9 @@ model:
 data:
   type: voc2012_aug
   num_classes: 21
-  num_workers: 4
-  batch_size: 8
-  max_training_samples: 100
+  num_workers: 2
+  batch_size: 1
+  max_training_samples: 10
   
 train:
   seed: 42
@@ -19,9 +19,10 @@ train:
   optimizer: adamw
   accum_steps: 2
   resume: ''
-  device: cuda
-  loss_type: u3p
+  device: cpu
+  loss_type: focal
 
   logger:
-    use_tensorboard: True
+    use_tensorboard: False
+    use_wandb: False
     log_dir: ./logs/

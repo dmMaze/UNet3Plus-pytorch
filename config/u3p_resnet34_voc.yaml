@@ -25,7 +25,7 @@ train:
   warmup_iters: 1000
 
   logger:
-    tensorboard: True
+    use_tensorboard: True
     log_dir: ./logs
 
 
