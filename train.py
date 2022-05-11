@@ -7,7 +7,6 @@ import os.path as osp
 
 import torch
 from torch.optim import SGD, Adam, AdamW, lr_scheduler
-from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
 
 from model import build_unet3plus, UNet3Plus
@@ -228,8 +227,12 @@ def main(args):
         cfg.train.seed = int(args.seed)
     if args.resume:
         cfg.train.resume = args.resume
-    cfg.data.data_dir = args.data_dir
-
+    if args.data_dir:
+        cfg.data.data_dir = args.data_dir
+    if args.use_tensorboard is not None:
+        cfg.train.logger.use_tensorboard = args.use_tensorboard == 1
+    elif args.use_wandb is not None:
+        cfg.train.logger.use_wandb = args.use_wandb == 1
     cfg.freeze()
     print(cfg)
     model, data = cfg.model, cfg.data
@@ -255,11 +258,17 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument('--resume',
                         help='resume from checkpoint',
-                        default='',
+                        default=None,
                         type=str)
     parser.add_argument('--data_dir',
-                        default="./data",
+                        default=None,
                         type=str)
+    parser.add_argument('--use_wandb',
+                        default=None,
+                        type=int)
+    parser.add_argument('--use_tensorboard',
+                        default=None,
+                        type=int)
 
     args = parser.parse_args()
     main(args)
