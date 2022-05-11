@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 from typing import List
 import torch.nn.functional as F
+import sys, os
+import os.path as osp
+sys.path.append(osp.dirname(osp.dirname(__file__)))
 
 from utils.weight_init import weight_init
 
@@ -37,10 +40,11 @@ def dec2dec_layer(in_ch, out_ch, scale, efficient=False):
 class FullScaleSkipConnect(nn.Module):
     def __init__(self, 
                  en_channels,   # encoder out channels, high to low
+                 en_scales,
                  num_dec,       # number of decoder out
                  skip_ch=64, 
-                 en_scales=None, 
                  dec_scales=None,
+                 max_connections=None,
                  bottom_dec_ch=1024):
 
         super().__init__()
@@ -48,11 +52,7 @@ class FullScaleSkipConnect(nn.Module):
 
         # encoder maps to decoder maps connections
         self.en2dec_layers = nn.ModuleList()
-        this_ch = en_channels[0]
-        if en_scales is None:
-            en_scales = []
-            for ch in en_channels:
-                en_scales.append(this_ch // ch)
+        # print(en_scales)
         for ch, scale in zip(en_channels, en_scales):
             self.en2dec_layers.append(en2dec_layer(ch, skip_ch, scale))
         
@@ -72,7 +72,7 @@ class FullScaleSkipConnect(nn.Module):
         out = []
         for en_map, layer in zip(en_maps, self.en2dec_layers):
             out.append(layer(en_map))
-        if dec_maps is not None or len(dec_maps) > 0:
+        if dec_maps is not None and len(dec_maps) > 0:
             for dec_map, layer in zip(dec_maps, self.dec2dec_layers):
                 out.append(layer(dec_map))
         return self.fuse_layer(torch.cat(out, 1))
@@ -101,13 +101,16 @@ class U3PDecoder(nn.Module):
         super().__init__()
         self.decoders = nn.ModuleDict()
         en_channels = en_channels[::-1]
-        for ii in range(len(en_channels)):
+        num_en_ch = len(en_channels)
+        for ii in range(num_en_ch):
             if ii == 0:
                 # first decoding output is identity mapping of last encoder map
                 self.decoders['decoder1'] = nn.Identity()
                 continue
+
             self.decoders[f'decoder{ii+1}'] = FullScaleSkipConnect(
                                                 en_channels[ii:], 
+                                                en_scales=2 ** np.arange(0, num_en_ch-ii),
                                                 num_dec=ii, 
                                                 skip_ch=skip_ch, 
                                                 bottom_dec_ch=en_channels[0]
@@ -116,7 +119,6 @@ class U3PDecoder(nn.Module):
     def forward(self, enc_map_list:List[torch.Tensor]):
         dec_map_list = []
         enc_map_list = enc_map_list[::-1]
-        layer: FullScaleSkipConnect
         for ii, layer_key in enumerate(self.decoders):
             layer = self.decoders[layer_key]
             if ii == 0:
@@ -191,3 +193,9 @@ class UNet3Plus(nn.Module):
         if xh != h or xw != w:
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
         return x
+
+if __name__ == '__main__':
+    input = torch.randn((2, 3, 320, 320))
+    model = UNet3Plus(num_classes=7)
+    out = model(input)
+    # print(out)
