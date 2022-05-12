@@ -10,14 +10,14 @@ from .unet3plus import UNet3Plus
 resnets = ['resnet18', 'resnet34', 'resnet50', 'resnet101']
 resnet_cfg = {
     'return_nodes': {
-        'relu': 'layer0',
+        # 'relu': 'layer0',
         'layer1': 'layer1',
         'layer2': 'layer2',
         'layer3': 'layer3',
-        # 'layer4': 'layer4',
+        'layer4': 'layer4',
     },
     'resnet18': {
-        'fe_channels': [64, 64, 128, 256],
+        'fe_channels': [64, 128, 256, 512],
         'channels': [64, 128, 256, 512],
     },
     'resnet50': {
@@ -54,7 +54,7 @@ class U3PResNetEncoder(nn.Module):
     def forward(self, x):
         out = self.backbone(x)
         for ii, compress in enumerate(self.compress_convs):
-            out[f'layer{ii}'] = compress(out[f'layer{ii}'])
+            out[f'layer{ii+1}'] = compress(out[f'layer{ii+1}'])
         out = [v for _, v in out.items()]
         return out
 
