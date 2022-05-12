@@ -10,6 +10,7 @@ cfg.model.pretrained = False
 cfg.model.skip_ch = 64
 cfg.model.use_cgm = False
 cfg.model.aux_losses = 2
+cfg.model.dropout = 0.3
 
 # DATA
 cfg.data = CN()

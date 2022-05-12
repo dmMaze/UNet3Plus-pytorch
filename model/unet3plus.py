@@ -123,7 +123,8 @@ class FullScaleSkipConnect(nn.Module):
                  num_dec,       # number of decoder out
                  skip_ch=64, 
                  dec_scales=None,
-                 bottom_dec_ch=1024):
+                 bottom_dec_ch=1024,
+                 dropout=0.3):
 
         super().__init__()
         concat_ch = skip_ch * (len(en_channels) + num_dec)
@@ -142,7 +143,7 @@ class FullScaleSkipConnect(nn.Module):
                 dec_scales.append(2 ** (ii + 1))
         for ii, scale in enumerate(dec_scales):
             dec_ch = bottom_dec_ch if ii == 0 else concat_ch
-            self.dec2dec_layers.append(dec2dec_layer(dec_ch, skip_ch, scale))
+            self.dec2dec_layers.append(dec2dec_layer(dec_ch, skip_ch, scale, dropout=dropout))
 
         self.fuse_layer = u3pblock(concat_ch, concat_ch, 1)
 
@@ -175,7 +176,7 @@ class U3PEncoderDefault(nn.Module):
 
 
 class U3PDecoder(nn.Module):
-    def __init__(self, en_channels = [64, 128, 256, 512, 1024], skip_ch=64):
+    def __init__(self, en_channels = [64, 128, 256, 512, 1024], skip_ch=64, dropout=0.3):
         super().__init__()
         self.decoders = nn.ModuleDict()
         en_channels = en_channels[::-1]
@@ -191,7 +192,8 @@ class U3PDecoder(nn.Module):
                                                 en_scales=2 ** np.arange(0, num_en_ch-ii),
                                                 num_dec=ii, 
                                                 skip_ch=skip_ch, 
-                                                bottom_dec_ch=en_channels[0]
+                                                bottom_dec_ch=en_channels[0],
+                                                dropout=dropout
                                             )
 
     def forward(self, enc_map_list:List[torch.Tensor]):
@@ -214,6 +216,7 @@ class UNet3Plus(nn.Module):
                  aux_losses=2,
                  encoder: U3PEncoderDefault = None,
                  channels=[3, 64, 128, 256, 512, 1024],
+                 dropout=0.3,
                  use_cgm=True):
         super().__init__()
 
@@ -222,7 +225,7 @@ class UNet3Plus(nn.Module):
         num_decoders = len(channels) - 1
         decoder_ch = skip_ch * num_decoders
 
-        self.decoder = U3PDecoder(self.encoder.channels[1:], skip_ch=skip_ch)
+        self.decoder = U3PDecoder(self.encoder.channels[1:], skip_ch=skip_ch, dropout=dropout)
         self.decoder.apply(weight_init)
         
         self.cls = nn.Sequential(

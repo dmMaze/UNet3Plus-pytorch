@@ -254,7 +254,7 @@ def main(args):
     np.random.seed(seed)
 
     model, data = cfg.model, cfg.data
-    model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained)
+    model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained, model.dropout)
     # model = UNet_3Plus_DeepSup()
     if data.type in ['voc2012', 'voc2012_aug']:
         train_loader, val_loader = build_data_loader(data.data_dir, data.batch_size, data.num_workers, data.max_training_samples)

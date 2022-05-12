@@ -59,13 +59,13 @@ class U3PResNetEncoder(nn.Module):
         return out
 
 
-def build_unet3plus(num_classes, encoder='default', skip_ch=64, aux_losses=2, use_cgm=False, pretrained=False) -> UNet3Plus:
+def build_unet3plus(num_classes, encoder='default', skip_ch=64, aux_losses=2, use_cgm=False, pretrained=False, dropout=0.3) -> UNet3Plus:
     if encoder == 'default':
         encoder = None
     elif encoder in resnets:
         encoder = U3PResNetEncoder(backbone=encoder, pretrained=pretrained)
     else:
         raise ValueError(f'Unsupported backbone : {encoder}')
-    model = UNet3Plus(num_classes, skip_ch, aux_losses, encoder, use_cgm=use_cgm)
+    model = UNet3Plus(num_classes, skip_ch, aux_losses, encoder, use_cgm=use_cgm, dropout=dropout)
     return model
 
