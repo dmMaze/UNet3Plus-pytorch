@@ -25,7 +25,7 @@ cfg.data.max_training_samples = -1
 # HYPERPARAMETERS
 cfg.train = CN()
 cfg.train.seed = 42
-cfg.train.num_epochs = 10
+cfg.train.epochs = 10
 
 cfg.train.lr = 0.001
 cfg.train.lrf = 0.0005  # final lr
@@ -39,7 +39,7 @@ cfg.train.nesterov = True
 
 cfg.train.accum_steps = 2
 cfg.train.resume = ''
-cfg.train.epochs = 120
+cfg.train.epochs = 52
 cfg.train.val_interval = 1
 cfg.train.device = 'cuda'
 

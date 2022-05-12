@@ -13,7 +13,7 @@ data:
   
 train:
   seed: 42
-  num_epochs: 52
+  epochs: 52
   lr: 0.0001
   weight_decay: 0.0005
   optimizer: adamw

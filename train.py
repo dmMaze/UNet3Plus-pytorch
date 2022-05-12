@@ -89,6 +89,7 @@ class Trainer:
 
     def train(self):
         for epoch in range(self.start_epoch, self.cfg.epochs):
+            self.logger.info(f'start training {epoch+1}/{self.cfg.epochs}')
             self.train_one_epoch()
             self.end_train_epoch()
 

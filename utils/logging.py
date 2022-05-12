@@ -65,3 +65,12 @@ class SummaryLogger:
                 for name, metric in metrics.items():
                     self.writer.add_scalars(tag + '_metrics/' + name, {tag: metric}, global_iter)
             self.writer.flush()
+
+    def info(self, **kwargs):
+        return self.cmd_logger.info(**kwargs)
+
+    def error(self, **kwargs):
+        return self.cmd_logger.error(**kwargs)
+
+    def warn(self, **kwargs):
+        return self.cmd_logger.warn(**kwargs)
