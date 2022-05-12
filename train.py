@@ -10,7 +10,6 @@ from torch.optim import SGD, Adam, AdamW, lr_scheduler
 from torch.cuda import amp
 
 from model import build_unet3plus, UNet3Plus
-from model.unet3plusoriginal import UNet_3Plus_DeepSup
 from torch.utils.data import DataLoader
 from datasets import build_data_loader
 from config.config import cfg
