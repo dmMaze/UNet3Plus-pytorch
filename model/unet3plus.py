@@ -103,15 +103,16 @@ def en2dec_layer(in_ch, out_ch, scale):
     m.append(u3pblock(in_ch, out_ch, num_block=1))
     return nn.Sequential(*m)
 
-def dec2dec_layer(in_ch, out_ch, scale, efficient=False):
+def dec2dec_layer(in_ch, out_ch, scale, efficient=False, dropout=0.3):
     up = [nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True) if scale != 1 else nn.Identity()]
     m = [u3pblock(in_ch, out_ch, num_block=1)]
+    dropout = [nn.Dropout(dropout)] if dropout > 0 else []
     # m = [C3(in_ch, out_ch)]
     efficient = True
     if efficient:
-        m = m + up
+        m = dropout + m + up
     else:
-        m = up + m  # used in paper
+        m = dropout + up + m  # used in paper
     return nn.Sequential(*m)
 
         
@@ -122,7 +123,6 @@ class FullScaleSkipConnect(nn.Module):
                  num_dec,       # number of decoder out
                  skip_ch=64, 
                  dec_scales=None,
-                 max_connections=None,
                  bottom_dec_ch=1024):
 
         super().__init__()
