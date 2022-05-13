@@ -23,6 +23,9 @@ Although Multi-label MS-SSIM loss is implemented but not used in the training, m
 The config file of the original model in the official paper is config/original_voc.yaml.   
 Please reference config/config.py for more info about model arch or training settings. Custom Dataset is not supported yet.  
 
+Use tensorboard or wandb to log training metrics.  
+![](assets/logging.png)
+
 
 # Prepare Datasets
 ## Pascal VOC
