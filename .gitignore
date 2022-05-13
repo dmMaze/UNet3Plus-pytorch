@@ -4,13 +4,14 @@
 *.zip
 temp.ipynb
 
+runs/*
 checkpoints
 logs
 wandb
 VOC2012
 VOCdevkit
 __pycache__
-runs
+
 .vscode
 
 tensorboard --logdir=runs

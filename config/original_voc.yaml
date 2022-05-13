@@ -1,5 +1,5 @@
 model:
-  encoder: resnet34
+  encoder: default
   skip_ch: 64
   aux_losses: 2
   pretrained: True
@@ -8,25 +8,24 @@ data:
   type: voc2012_aug
   num_classes: 21
   num_workers: 0
-  batch_size: 16
-  max_training_samples: -1
+  batch_size: 8
+  max_training_samples: 100
+  crop_size: 320
   
 train:
   seed: 42
   epochs: 52
-  lr: 0.0001
+  lr: 0.0002
   weight_decay: 0.0005
   optimizer: adamw
   accum_steps: 4
-  resume: ''
-  save_dir: ./checkpoints/
-  save_name: u3p_resnet34_voc_u3ploss
-  loss_type: focal
+  save_name: original_voc
+  loss_type: u3p
   warmup_iters: 3000
 
   logger:
     use_tensorboard: True
-    log_dir: ./runs/u3p_resnet34_voc
+    log_dir: ./runs
 
 
   

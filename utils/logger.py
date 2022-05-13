@@ -1,5 +1,6 @@
 import logging
 import os
+import os.path as osp
 
 def set_logging(name=None, verbose=True):
     for handler in logging.root.handlers[:]:
@@ -40,7 +41,8 @@ class SummaryLogger:
         self.use_tensorboard = cfg.use_tensorboard
         if self.use_tensorboard:
             from torch.utils.tensorboard import SummaryWriter
-            self.writer = SummaryWriter(cfg.log_dir)
+            save_dir = osp.join(cfg.log_dir, cfg_all.train.save_name)
+            self.writer = SummaryWriter(save_dir)
         elif self.use_wandb:
             import wandb
             run_id = cfg.wandb.run_id

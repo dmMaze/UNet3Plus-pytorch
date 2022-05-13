@@ -45,13 +45,11 @@ cfg.train.device = 'cuda'
 
 cfg.train.aux_weight = 0.4
 cfg.train.loss_type = 'focal'
-
-cfg.train.save_name = 'unet3plus'
-cfg.train.save_dir = './checkpoints'
+cfg.train.save_name = 'UNet3Plus'
 
 # LOGGING
 cfg.train.logger = CN()
-cfg.train.logger.log_dir = './runs/UnetV3Plus'
+cfg.train.logger.log_dir = './runs'
 
 # tensorboard setting
 cfg.train.logger.use_tensorboard = True

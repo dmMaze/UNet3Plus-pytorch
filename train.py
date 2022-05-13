@@ -36,12 +36,14 @@ class Trainer:
         # build metrics
         self.metrics = StreamSegMetrics(cfg.data.num_classes)
 
-        os.makedirs(cfg.train.save_dir, exist_ok=True)
-        hyp_path = osp.join(cfg.train.save_dir, cfg.train.save_name+'.yaml')
+        cfg = self.cfg = cfg.train
+
+        save_dir = osp.join(cfg.logger.log_dir, cfg.save_name)
+        os.makedirs(save_dir, exist_ok=True)
+        hyp_path = osp.join(save_dir, cfg.save_name+'.yaml')
         with open(hyp_path, "w") as f: 
             f.write(cfg.dump())
-
-        cfg = self.cfg = cfg.train
+        
         self.model: UNet3Plus = model
         self.train_loader: DataLoader = train_loader
         self.val_loader: DataLoader = val_loader
@@ -102,12 +104,8 @@ class Trainer:
         batch_size = self.train_loader.batch_size
         accum_steps = self.cfg.accum_steps
         
-        pbar = tqdm(pbar, total=num_batches, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
-        # with torch.profiler.profile(
-        #         schedule=torch.profiler.schedule(wait=1, warmup=1, active=5),
-        #         on_trace_ready=torch.profiler.tensorboard_trace_handler(self.cfg.logger.log_dir),
-        #         record_shapes=True
-        # ) as prof:
+        pbar = tqdm(pbar, total=num_batches, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b} epoch: ' \
+            + f'{self.epoch + 1}/{self.cfg.epochs}')  # progress bar
         for i, batch in pbar:
             self.warmup()
             imgs, masks = batch[0].to(device), batch[1].to(device, dtype=torch.long)
@@ -121,8 +119,6 @@ class Trainer:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
-                    # prof.step()
-        # self.scheduler.step()
         pbar.close()
 
     def end_train_epoch(self):
@@ -145,16 +141,10 @@ class Trainer:
             'optimizer': self.optimizer.state_dict(),
             'scheduler': self.scheduler.state_dict(),
         }
-        torch.save(state, osp.join(self.cfg.save_dir, save_name))
+        torch.save(state, osp.join(self.cfg.logger.log_dir, self.cfg.save_name, save_name))
 
     def warmup(self):
         ni = self.global_iter
-        # if ni <= self.cfg.warmup_iters:
-        #     xi = [0, self.cfg.warmup_iters]  # x interp
-        #     for j, x in enumerate(self.optimizer.param_groups):
-        #         x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * self.lr_func(self.epoch)])
-        #         if 'momentum' in x:
-        #             x['momentum'] = np.interp(ni, xi, [0.8, self.cfg.momentum])
 
         warmup_iters = max(self.cfg.warmup_iters, len(self.train_loader.dataset) * 3)
         if ni <= warmup_iters:
@@ -257,7 +247,7 @@ def main(args):
     model = build_unet3plus(data.num_classes, model.encoder, model.skip_ch, model.aux_losses, model.use_cgm, model.pretrained, model.dropout)
     # model = UNet_3Plus_DeepSup()
     if data.type in ['voc2012', 'voc2012_aug']:
-        train_loader, val_loader = build_data_loader(data.data_dir, data.batch_size, data.num_workers, data.max_training_samples)
+        train_loader, val_loader = build_data_loader(data.data_dir, data.batch_size, data.num_workers, data.max_training_samples, data.crop_size)
     else:
         raise NotImplementedError
     

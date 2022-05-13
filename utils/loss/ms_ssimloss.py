@@ -181,7 +181,7 @@ class MS_SSIMLoss(nn.Module):
         win_size = min(h, w, self.win_size)
         kernel = self.kernel if win_size == self.win_size else gaussian_kernel2d(win_size, 1)
 
-        kernel = kernel.to(pred.dtype)
+        kernel = kernel.to(pred.dtype).to(pred.device)
         weights = self.weights.to(pred.dtype).to(pred.device)
         # if kernel.device != pred.device:
         #     kernel.to(pred.device)

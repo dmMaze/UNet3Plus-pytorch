@@ -14,8 +14,8 @@ class U3PLloss(nn.Module):
         self.focal_loss = FocalLoss(ignore_index=255, size_average=True)  
         if loss_type == 'u3p':
             self.iou_loss = IoULoss(process_input=not process_input)
-            # self.ms_ssim_loss = MS_SSIMLoss(process_input=not process_input)
-            self.ms_ssim_loss = SSIMLoss(process_input=not process_input)
+            self.ms_ssim_loss = MS_SSIMLoss(process_input=not process_input)
+            # self.ms_ssim_loss = SSIMLoss(process_input=not process_input)
             # self.ms_ssim_loss = SSIM()
         elif loss_type != 'focal':
             raise ValueError(f'Unknown loss type: {loss_type}')
